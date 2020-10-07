@@ -1,13 +1,56 @@
 import React, { useState, useCallback, useRef } from "react";
 import * as tf from "@tensorflow/tfjs";
 import { Tensor } from "@tensorflow/tfjs";
+import { parseInSetRule } from "rule_parser";
 
 import StyledCanvasDiv from "../styled/StyledCanvasDiv";
 
 const width = 600;
 const height = 600;
-const kernel: tf.Tensor4D = tf.ones([3, 3, 1, 1]);
+//const kernel: tf.Tensor4D = tf.ones([3, 3, 1, 1]);
 
+interface RuleCalc {
+  next(t: Tensor): Tensor;
+  dispose(): void;
+}
+
+const getRuleCalc: (s: string) => RuleCalc = (s) => {
+  const parseResult = parseInSetRule(s);
+  const mykernel: tf.Tensor4D = tf
+    .tensor(parseResult.array)
+    .reshape([3, 3, 1, 1]);
+  const dispose = () => mykernel.dispose();
+  const next = (t: Tensor) => {
+    const { sumRule } = parseResult;
+    const conv = tf.tidy(() =>
+      t
+        .reshape([1, height, width, 1])
+        .conv2d(mykernel, 1, "same")
+        .reshape([height, width])
+    );
+    const result = tf.tidy(() => {
+      const ones = tf.onesLike(t);
+      const zeros = tf.zerosLike(t);
+      t = sumRule.oneVals.reduce(
+        (oldt: Tensor, val: number) => ones.where(conv.equal(val), oldt),
+        t
+      );
+      t = sumRule.zeroVals.reduce(
+        (oldt: Tensor, val: number) => zeros.where(conv.equal(val), oldt),
+        t
+      );
+      return t;
+    });
+    conv.dispose();
+    return result;
+  };
+  return {
+    dispose,
+    next,
+  };
+};
+
+/*
 const getNextGol: (t: Tensor) => Tensor = (t) => {
   const c = tf.tidy(() =>
     t
@@ -23,7 +66,11 @@ const getNextGol: (t: Tensor) => Tensor = (t) => {
         c.equal(3).logicalOr(c.equal(7)).logicalOr(c.equal(9)),
         t.where(
           //c.equal(2).logicalOr(c.equal(4)).logicalOr(c.equal(5)).logicalAnd(c.lessEqual(6)),
-          c.equal(2).logicalOr(c.equal(4)).logicalOr(c.equal(6)).logicalOr(c.equal(8)),
+          c
+            .equal(2)
+            .logicalOr(c.equal(4))
+            .logicalOr(c.equal(6))
+            .logicalOr(c.equal(8)),
           //c.equal(2).logicalOr(c.equal(4)),
           tf.zerosLike(t)
         )
@@ -32,6 +79,10 @@ const getNextGol: (t: Tensor) => Tensor = (t) => {
   c.dispose();
   return result;
 };
+ */
+
+const initialRuleText = "nw n ne w e sw se {0 0 u u u 0 u 1 1 1}";
+const initialRuleCalc = getRuleCalc(initialRuleText);
 
 // prettier-ignore
 const golToImageTensor: (t: Tensor) => Tensor = (t) => tf.tidy(() => {
@@ -73,9 +124,21 @@ const GolCanvas: React.FC = () => {
   const timeDeltaRef = useRef(20);
   const ratioRef = useRef(0.4);
   const framesRef = useRef<ImageBitmap[]>([]);
-  const aRef = useRef<HTMLAnchorElement | null>(null);
+  //const aRef = useRef<HTMLAnchorElement | null>(null);
+  const getNextGolRef = useRef<RuleCalc>(initialRuleCalc);
   const [count, setCount] = useState(0);
   const [canvasRef, setCanvasRef] = useState<HTMLCanvasElement | null>(null);
+  const [ruleText, setRuleText] = useState(initialRuleText);
+
+  const compileNewRule = useCallback(() => {
+    try {
+      const newRule = getRuleCalc(ruleText);
+      getNextGolRef.current.dispose();
+      getNextGolRef.current = newRule;
+    } catch (error) {
+      console.error(error);
+    }
+  }, [getNextGolRef, ruleText]);
 
   const paint = useCallback<() => Promise<null>>(() => {
     if (canvasRef !== null) {
@@ -90,7 +153,7 @@ const GolCanvas: React.FC = () => {
         };
         return createImageBitmap(getImageData(golRef.current), bitmapOptions)
           .then((image: ImageBitmap) => {
-            framesRef.current.push(image);
+            //framesRef.current.push(image);
             ctx.drawImage(image, 0, 0);
           })
           .then(() => null);
@@ -102,7 +165,7 @@ const GolCanvas: React.FC = () => {
   const advance = useCallback(
     (once?: boolean) => {
       //console.log(count, tf.memory());
-      const nextGol = getNextGol(golRef.current);
+      const nextGol = getNextGolRef.current.next(golRef.current);
       golRef.current.dispose();
       //console.log(count, tf.memory());
       golRef.current = nextGol;
@@ -143,6 +206,7 @@ const GolCanvas: React.FC = () => {
     }
   }, [goState, advance]);
 
+  /*
   const onDowload = useCallback(() => {
     const ctx = canvasRef?.getContext("2d");
     if (ctx === null || ctx === undefined) {
@@ -154,7 +218,7 @@ const GolCanvas: React.FC = () => {
           return new Promise<Blob | null>((res) => {
             ctx.canvas.toBlob((blob: Blob | null) => {
               if (blob === null) {
-                console.log('null blob');
+                console.log("null blob");
               }
               res(blob);
             });
@@ -184,6 +248,7 @@ const GolCanvas: React.FC = () => {
       });
     }
   }, [canvasRef, aRef]);
+   */
 
   return (
     <>
@@ -227,12 +292,18 @@ const GolCanvas: React.FC = () => {
             }}
           />
         </label>
+        <input type="text" onChange={(e) => setRuleText(e.target.value)} />
+        <button type="button" onClick={() => compileNewRule()}>
+          Compile Rule
+        </button>
+        {/*
         <button type="button" onClick={onDowload}>
           Download Frames
           <a style={{ display: "none" }} ref={aRef} href="/">
             [hidden]
           </a>
         </button>
+          */}
       </form>
     </>
   );

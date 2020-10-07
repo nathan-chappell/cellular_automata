@@ -34,5 +34,6 @@ module.exports = {
     "@typescript-eslint/no-explicit-any": "off",
     "no-useless-return": "off",
     "no-else-return": "off",
+    "no-param-reassign": "off",
   },
 };
