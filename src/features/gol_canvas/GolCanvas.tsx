@@ -81,7 +81,7 @@ const getNextGol: (t: Tensor) => Tensor = (t) => {
 };
  */
 
-const initialRuleText = "nw n ne w e sw se {0 0 u u u 0 u 1 1 1}";
+const initialRuleText = "nw n ne w c e sw s se {0 0 u u u 0 u 1 1 1}";
 const initialRuleCalc = getRuleCalc(initialRuleText);
 
 // prettier-ignore
@@ -125,8 +125,9 @@ const GolCanvas: React.FC = () => {
   const ratioRef = useRef(0.4);
   const framesRef = useRef<ImageBitmap[]>([]);
   //const aRef = useRef<HTMLAnchorElement | null>(null);
+  const iterationRef = useRef(0);
+  const maxIteration = useRef(100);
   const getNextGolRef = useRef<RuleCalc>(initialRuleCalc);
-  const [count, setCount] = useState(0);
   const [canvasRef, setCanvasRef] = useState<HTMLCanvasElement | null>(null);
   const [ruleText, setRuleText] = useState(initialRuleText);
 
@@ -154,6 +155,7 @@ const GolCanvas: React.FC = () => {
         return createImageBitmap(getImageData(golRef.current), bitmapOptions)
           .then((image: ImageBitmap) => {
             //framesRef.current.push(image);
+            //
             ctx.drawImage(image, 0, 0);
           })
           .then(() => null);
@@ -162,21 +164,30 @@ const GolCanvas: React.FC = () => {
     return Promise.resolve(null);
   }, [canvasRef]);
 
+  const init = useCallback(() => {
+    (document as any).framesRef = framesRef;
+    console.log("init");
+    framesRef.current = [];
+    golRef.current.dispose();
+    golRef.current = randomGol(ratioRef.current);
+  }, [framesRef, golRef]);
+
   const advance = useCallback(
     (once?: boolean) => {
-      //console.log(count, tf.memory());
+      //console.log(tf.memory());
       const nextGol = getNextGolRef.current.next(golRef.current);
       golRef.current.dispose();
-      //console.log(count, tf.memory());
+      //console.log(tf.memory());
       golRef.current = nextGol;
       paint().then(() => {
         if (goState.current.go && !once) {
-          if (count === 50) {
-            goState.current.go = false;
-            setCount(0);
+          if (iterationRef.current >= maxIteration.current) {
+            iterationRef.current = 0;
+            init();
+            advance();
           } else {
-            setCount(count + 1);
-            //console.log("setting timeout", goState.current.go, count);
+            iterationRef.current += 1;
+            //console.log("setting timeout", goState.current.go);
             setTimeout(() => {
               advance();
             }, timeDeltaRef.current);
@@ -184,16 +195,8 @@ const GolCanvas: React.FC = () => {
         }
       });
     },
-    [goState, paint, golRef, count, setCount, timeDeltaRef]
+    [goState, paint, golRef, timeDeltaRef, init]
   );
-
-  const init = useCallback(() => {
-    (document as any).framesRef = framesRef;
-    framesRef.current = [];
-    golRef.current.dispose();
-    golRef.current = randomGol(ratioRef.current);
-    advance(true);
-  }, [framesRef, golRef, advance]);
 
   const onClick = useCallback(() => {
     console.log(tf.memory());
@@ -292,10 +295,25 @@ const GolCanvas: React.FC = () => {
             }}
           />
         </label>
-        <input type="text" onChange={(e) => setRuleText(e.target.value)} />
+        <input
+          type="text"
+          value={ruleText}
+          onChange={(e) => setRuleText(e.target.value)}
+        />
         <button type="button" onClick={() => compileNewRule()}>
           Compile Rule
         </button>
+        <input
+          type="number"
+          onChange={(e) => {
+            if (Number(e.target.value) > 10) {
+              maxIteration.current = Number(e.target.value);
+            }
+          }}
+          min="10"
+          max="100000"
+          step="10"
+        />
         {/*
         <button type="button" onClick={onDowload}>
           Download Frames
