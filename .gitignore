@@ -3,3 +3,4 @@ node_modules/
 *.swp
 data/
 .eslint_report
+dist/bundle.js
