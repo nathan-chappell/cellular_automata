@@ -20,10 +20,10 @@ const getNextGol: (t: Tensor) => Tensor = (t) => {
       .onesLike(t)
       //.where(c.greaterEqual(5), t.where(c.equal(2), tf.zerosLike(t)))
       .where(
-        c.equal(3).logicalOr(c.greaterEqual(7)),
+        c.equal(3).logicalOr(c.equal(7)).logicalOr(c.equal(9)),
         t.where(
           //c.equal(2).logicalOr(c.equal(4)).logicalOr(c.equal(5)).logicalAnd(c.lessEqual(6)),
-          c.equal(2).logicalOr(c.equal(4)).logicalOr(c.equal(6)),
+          c.equal(2).logicalOr(c.equal(4)).logicalOr(c.equal(6)).logicalOr(c.equal(8)),
           //c.equal(2).logicalOr(c.equal(4)),
           tf.zerosLike(t)
         )
