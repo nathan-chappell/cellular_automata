@@ -81,7 +81,8 @@ const getNextGol: (t: Tensor) => Tensor = (t) => {
 };
  */
 
-const initialRuleText = "nw n ne w c e sw s se {0 0 u u u 0 u 1 1 1}";
+//const initialRuleText = "nw n ne w c e sw s se {0 0 u u u 0 u 1 1 1}";
+const initialRuleText = "nw n  ne e s se w  {0  1 u  1 u  0 1  0 0 0 0}";
 const initialRuleCalc = getRuleCalc(initialRuleText);
 
 // prettier-ignore
@@ -106,27 +107,30 @@ const getImageData: (t: Tensor) => ImageData = (t) => {
 
 function randomGol(ratio: number): Tensor {
   console.log("random gol");
-  const t = tf
-    .ones([height, width])
-    .where(
-      tf.randomUniform([height, width]).less(ratio),
-      tf.zeros([height, width])
-    );
+  const t = tf.tidy(() =>
+    tf
+      .ones([height, width])
+      .where(
+        tf.randomUniform([height, width]).less(ratio),
+        tf.zeros([height, width])
+      )
+  );
   //console.log(t.dataSync());
   return t;
 }
 
-const initialGol = randomGol(0.3);
+const initialGol = randomGol(1);
+let first = true;
 
 const GolCanvas: React.FC = () => {
   const golRef = useRef<Tensor>(initialGol);
   const goState = useRef<{ go: boolean }>({ go: true });
-  const timeDeltaRef = useRef(20);
-  const ratioRef = useRef(0.4);
+  const timeDeltaRef = useRef(1);
+  const ratioRef = useRef(1);
   const framesRef = useRef<ImageBitmap[]>([]);
   //const aRef = useRef<HTMLAnchorElement | null>(null);
   const iterationRef = useRef(0);
-  const maxIteration = useRef(100);
+  const maxIteration = useRef(2000);
   const getNextGolRef = useRef<RuleCalc>(initialRuleCalc);
   const [canvasRef, setCanvasRef] = useState<HTMLCanvasElement | null>(null);
   const [ruleText, setRuleText] = useState(initialRuleText);
@@ -167,6 +171,7 @@ const GolCanvas: React.FC = () => {
   const init = useCallback(() => {
     (document as any).framesRef = framesRef;
     console.log("init");
+    console.log(tf.memory());
     framesRef.current = [];
     golRef.current.dispose();
     golRef.current = randomGol(ratioRef.current);
@@ -252,13 +257,22 @@ const GolCanvas: React.FC = () => {
     }
   }, [canvasRef, aRef]);
    */
+  if (first) {
+    first = false;
+    init();
+    advance();
+  }
 
   return (
     <>
       <h2>The game of life</h2>
       <StyledCanvasDiv width={width} height={height}>
         <canvas
-          ref={(ref) => setCanvasRef(ref)}
+          ref={(ref) => {
+            setCanvasRef(ref);
+            init();
+            advance();
+          }}
           height={height}
           width={width}
         />
